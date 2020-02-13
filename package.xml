@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="2">
+  <name>location_register</name>
+  <version>0.1.0</version>
+  <description>This is package to bringup turtlebot2</description>
+  <maintainer email="l1sum@icloud.com">l1sum</maintainer>
+  <license>GNU General Public License</license>
+
+  <build_depend>rclcpp</build_depend>
+  <build_depend>rione_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>tf2_ros</build_depend>
+
+  <exec_depend>launch_ros</exec_depend>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
