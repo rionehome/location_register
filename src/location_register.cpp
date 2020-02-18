@@ -36,6 +36,14 @@ LocationRegister::LocationRegister() : Node("location_register") {
         }
     );
 
+    _send_goal_location = this->create_subscription<rione_msgs::msg::Request>(
+        "/location/send_goal_location",
+        10,
+        [this](rione_msgs::msg::Request::SharedPtr msg){
+            send_goal_location(msg);
+        }
+    );
+
     _localization = this->create_subscription<nav_msgs::msg::Odometry>(
         "/localization",
         10,
@@ -51,6 +59,11 @@ LocationRegister::LocationRegister() : Node("location_register") {
 
     request_publisher = this->create_publisher<rione_msgs::msg::Request>(
         "/location/answer",
+        10
+    );
+
+    goal_location_publisher = this->create_publisher<geometry_msgs::msg::PoseStamped>(
+        "/move_base_simple/goal",
         10
     );
 
@@ -71,9 +84,19 @@ void LocationRegister::regist_current_position(rione_msgs::msg::Request::SharedP
 
 void LocationRegister::request_location(rione_msgs::msg::Request::SharedPtr msg){
     string name = msg->locations[0].name;
-    string file_name = msg->file;
+    string file = msg->file;
 
-    vector<string> positions = load_location(file_name);
+    rione_msgs::msg::Location position = rione_msgs::msg::Location();
+
+    position.position = search_position(file, name);
+
+    location_publisher->publish(position);
+}
+
+geometry_msgs::msg::Point LocationRegister::search_position(string file, string name){
+    geometry_msgs::msg::Point point = geometry_msgs::msg::Point();
+
+    vector<string> positions = load_location(file);
 
     int pos;
     for(pos=0; pos < (int)positions.size(); pos++) {
@@ -81,19 +104,19 @@ void LocationRegister::request_location(rione_msgs::msg::Request::SharedPtr msg)
 
         if (contents[0] == name) {
             vector<string> pose = analize_content(contents[1], ',');
-            rione_msgs::msg::Location position = rione_msgs::msg::Location();
 
-            position.name = name;
-            position.position.x = stod(pose[0]);
-            position.position.y = stod(pose[1]);
-            position.position.z = stod(pose[2]);
-
-            location_publisher->publish(position);
+            point.x = stod(pose[0]);
+            point.y = stod(pose[1]);
+            point.z = stod(pose[2]);
 
             string log = "LOAD LOCATION : " + contents[0] + " "+ contents[1];
             RCLCPP_INFO(this->get_logger(), log);
+
+            return point;
         }
     }
+    
+    return point;
 }
 
 void LocationRegister::request_current_location(rione_msgs::msg::Request::SharedPtr msg){
@@ -130,6 +153,17 @@ void LocationRegister::request_location_list(rione_msgs::msg::Request::SharedPtr
     }
 
     request_publisher->publish(answer);
+}
+
+void LocationRegister::send_goal_location(rione_msgs::msg::Request::SharedPtr msg){
+    string name = msg->locations[0].name;
+    string file = msg->file;
+
+    goal_position.pose.position = search_position(file, name);
+
+    goal_location_publisher->publish(goal_position);
+
+    RCLCPP_INFO(this->get_logger(), "SENT GOAL POSITION");
 }
 
 vector<string> LocationRegister::load_location(string file_name){
