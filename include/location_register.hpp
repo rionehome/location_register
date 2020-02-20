@@ -10,6 +10,7 @@
 #include <rione_msgs/msg/command.hpp>
 #include <rione_msgs/msg/location.hpp>
 #include <rione_msgs/msg/request.hpp>
+#include <rione_msgs/srv/request_data.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
@@ -20,44 +21,40 @@
 using namespace std;
 
 class LocationRegister :
-    public rclcpp::Node {
+    public rclcpp::Node 
+{
         private:
+            rclcpp::Service<rione_msgs::srv::RequestData>::SharedPtr _request_service;
 
-            rclcpp::Subscription<rione_msgs::msg::Request>::SharedPtr _register_current_position;
-            rclcpp::Subscription<rione_msgs::msg::Request>::SharedPtr _request_location;
-            rclcpp::Subscription<rione_msgs::msg::Request>::SharedPtr _request_current_location;
-            rclcpp::Subscription<rione_msgs::msg::Request>::SharedPtr _request_location_list;
-            rclcpp::Subscription<rione_msgs::msg::Request>::SharedPtr _send_goal_location;
+            void handleService_(
+                const shared_ptr<rmw_request_id_t> request_header,
+                const shared_ptr<rione_msgs::srv::RequestData::Request> request,
+                const shared_ptr<rione_msgs::srv::RequestData::Response> response
+            );
 
-            rclcpp::Subscription<rione_msgs::msg::Command>::SharedPtr _save_location;
-            rclcpp::Subscription<rione_msgs::msg::Command>::SharedPtr _load_location;
-            rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr _localization;
+            short check_command(string command);
 
-            rclcpp::Publisher<rione_msgs::msg::Location>::SharedPtr location_publisher;
-            rclcpp::Publisher<rione_msgs::msg::Request>::SharedPtr request_publisher;
-            rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_location_publisher;
+            vector<rione_msgs::msg::Location> load_location(string file_name);
 
-            void regist_current_position(rione_msgs::msg::Request::SharedPtr msg);
-            void request_location(rione_msgs::msg::Request::SharedPtr msg);
-            void request_current_location(rione_msgs::msg::Request::SharedPtr msg);
-            void request_location_list(rione_msgs::msg::Request::SharedPtr msg);
-            void send_goal_location(rione_msgs::msg::Request::SharedPtr msg);
+            bool save_location(rione_msgs::msg::Location location, string file);
 
-            void get_localization(nav_msgs::msg::Odometry::SharedPtr msg);
-            bool is_register(string command);
-            bool is_request(string command);
-            geometry_msgs::msg::Point search_position(string file, string name);
-            vector<string> analize_content(string content, char separator);
-            void save_location(rione_msgs::msg::Request::SharedPtr msg);
-            vector<string> load_location(string file_name);
+            bool regist_location(vector<rione_msgs::msg::Location> locations, string file);
 
-            geometry_msgs::msg::Point position = geometry_msgs::msg::Point();
+            vector<rione_msgs::msg::Location> get_location(vector<rione_msgs::msg::Location> locations, string file);
+
+            vector<rione_msgs::msg::Location> get_all_location(string file);
+
+            rione_msgs::msg::Location analize_content(string content);
+
+            vector<rione_msgs::msg::Location> search_position(vector<rione_msgs::msg::Location> locations, vector<rione_msgs::msg::Location> search);
+
+            bool send_goal_location(rione_msgs::msg::Location location);
+
+            string log;
             geometry_msgs::msg::PoseStamped goal_position = geometry_msgs::msg::PoseStamped();
 
-            string position_name;
-            string file_name;
+            rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_location_publisher;
 
         public:
             LocationRegister();
-
 };
