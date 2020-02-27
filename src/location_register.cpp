@@ -1,17 +1,16 @@
-#include "location_register.hpp"
+#include "location_register/location_register.hpp"
 #include <rclcpp/rclcpp.hpp>
 
 using namespace std;
-using namespace std::placeholders;
 
 LocationRegister::LocationRegister() : Node("location_register")
 {
-    _request_service = this->create_service<rione_msgs::srv::RequestData>(
+    _request_service = this->create_service<rione_msgs::srv::RequestLocation>(
         "/location_register",
         [this](
             const shared_ptr<rmw_request_id_t> request_header,
-            const shared_ptr<rione_msgs::srv::RequestData::Request> request,
-            const shared_ptr<rione_msgs::srv::RequestData::Response> response)
+            const shared_ptr<rione_msgs::srv::RequestLocation::Request> request,
+            const shared_ptr<rione_msgs::srv::RequestLocation::Response> response)
         {
             (void)request_header;
             handleService_(request_header, request, response);
@@ -31,8 +30,8 @@ LocationRegister::LocationRegister() : Node("location_register")
 //
 void LocationRegister::handleService_(
                 const shared_ptr<rmw_request_id_t> request_header,
-                const shared_ptr<rione_msgs::srv::RequestData::Request> request,
-                const shared_ptr<rione_msgs::srv::RequestData::Response> response)
+                const shared_ptr<rione_msgs::srv::RequestLocation::Request> request,
+                const shared_ptr<rione_msgs::srv::RequestLocation::Response> response)
 {
     short command_number = check_command(request->command);
 
@@ -86,6 +85,11 @@ short LocationRegister::check_command(string command)
         RCLCPP_INFO(this->get_logger(), log);
         return 2;
     }
+    else if (command == "REMOVE")
+    {
+        RCLCPP_INFO(this->get_logger(), "RECIEVE REMOVE REUEST");
+        return 3;
+    }
     else
     {
         return -1;
@@ -109,13 +113,13 @@ vector<rione_msgs::msg::Location> LocationRegister::load_location(string file)
     if (reading_file.fail())
     {
         log = "NO SUCH FILE : " + file;
-        RCLCPP_INFO(this->get_logger(), log);
+        RCLCPP_ERROR(this->get_logger(), log);
         return vector<rione_msgs::msg::Location>();
     }
 
     while (getline(reading_file, buffer))
     {
-        locations.push_back(analize_content(buffer));
+        locations.push_back(analyze_content(buffer));
     }
 
     reading_file.close();
@@ -126,30 +130,24 @@ vector<rione_msgs::msg::Location> LocationRegister::load_location(string file)
 //
 //
 //
-bool LocationRegister::save_location(rione_msgs::msg::Location location, string file)
+bool LocationRegister::save_data(string data, string file)
 {
-
     ofstream writing_file;
     writing_file.open(file, ios::app);
 
     if (writing_file.fail())
     {
         log = "NO SUCH FILE : " + file;
-        RCLCPP_INFO(this->get_logger(), log);
+        RCLCPP_ERROR(this->get_logger(), log);
         return false;
     }
-
-    string name = location.name;
-    geometry_msgs::msg::Point pose = location.position;
 
     string log = "SAVE DATA TO " + file;
     RCLCPP_INFO(this->get_logger(), log);
 
-    log = name + ":" + to_string(pose.x) + "," + to_string(pose.y) + "," + to_string(pose.z);
+    RCLCPP_DEBUG(this->get_logger(), data);
 
-    RCLCPP_INFO(this->get_logger(), log);
-
-    writing_file << log << endl;
+    writing_file << data << endl;
 
 
     writing_file.close();
@@ -169,10 +167,48 @@ bool LocationRegister::regist_location(vector<rione_msgs::msg::Location> locatio
 
     for(count=0; count<(int)locations.size(); count++)
     {
-        save_location(locations[count], file);
+        string data = location2json(locations[count], file);
+
+        save_data(data, file);
     }
 
     return true;
+}
+
+//
+//
+//
+string LocationRegister::location2json(rione_msgs::msg::Location location, string file)
+{
+    picojson::object root;
+    picojson::object place;
+    picojson::object coordinate;
+    picojson::object data;
+    picojson::array datalist;
+    picojson::array contents;
+ 
+    coordinate.insert(make_pair("x", picojson::value(location.position.x)));
+    coordinate.insert(make_pair("y", picojson::value(location.position.y)));
+    coordinate.insert(make_pair("z", picojson::value(location.position.z)));
+    place.insert(make_pair("coordinate", picojson::value(coordinate)));
+
+    datalist.push_back(picojson::value(place));
+
+    int count;
+    for(count=0; count<location.contents.size(); count++)
+    {
+        contents.push_back(picojson::value(location.contents[count]));
+    }
+
+    if(0<count)
+    {
+        data.insert( make_pair( "contents", picojson::value( contents ) ) );
+        datalist.push_back(picojson::value(data));
+    }
+ 
+    root.insert(make_pair(location.name, picojson::value(datalist)));
+ 
+    return picojson::value(root).serialize();
 }
 
 //
@@ -217,34 +253,59 @@ vector<rione_msgs::msg::Location> LocationRegister::get_all_location(string file
 //
 //
 //
-rione_msgs::msg::Location LocationRegister::analize_content(string content)
+rione_msgs::msg::Location LocationRegister::analyze_content(string content)
 {
     RCLCPP_DEBUG(this->get_logger(), "NOW SEPARATE CONTENT");
     rione_msgs::msg::Location location = rione_msgs::msg::Location();
-    string buffer;
 
-    vector<string> separated_data;
-    stringstream ss{content};
-
-    while (getline(ss, buffer, ':'))
-    {
-        separated_data.push_back(buffer);
+    
+    picojson::value v;
+    std::string err = picojson::parse(v, content);
+    if (! err.empty()) {
+	    RCLCPP_ERROR(this->get_logger(), "FAILED PARSE");
+        return location;
     }
 
-    location.name = separated_data[0];
-    vector<float> position_data;
-    ss = stringstream(separated_data[1]);
+    map<string, picojson::value> location_object = v.get<picojson::object>();
+    location.name = location_object.begin()->first;
 
-    while (getline(ss, buffer, ','))
+    picojson::array datas = location_object.begin()->second.get<picojson::array>();
+    int count;
+    for(count=0; count<datas.size(); count++)
     {
-        position_data.push_back(stof(buffer));
-    }
+        map<string, picojson::value> state = datas[count].get<picojson::object>();
+        if("coordinate"==state.begin()->first)
+        {
+            location.position = json2coordinate(state.begin()->second);
+        }
+        else if("contents"==state.begin()->first)
+        {
+            vector<picojson::value> contents = state.begin()->second.get<picojson::array>();
 
-    location.position.x = position_data[0];
-    location.position.y = position_data[1];
-    location.position.z = position_data[2];
+            int i;
+            for(i=0; i<contents.size(); i++)
+            {
+                location.contents.push_back(contents[i].serialize());
+            }
+        }
+    }
 
     return location;
+}
+
+//
+//
+//
+geometry_msgs::msg::Point LocationRegister::json2coordinate(picojson::value value)
+{
+    geometry_msgs::msg::Point point = geometry_msgs::msg::Point();
+
+    map<string, picojson::value> coordinate = value.get<picojson::object>();
+    point.x = coordinate["x"].get<double>();
+    point.y = coordinate["y"].get<double>();
+    point.z = coordinate["z"].get<double>();
+
+    return point;
 }
 
 //

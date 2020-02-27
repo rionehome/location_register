@@ -1,26 +1,37 @@
 import sys
 
-from rione_msgs.srv import RequestData
+from rione_msgs.srv import RequestLocation
 from rione_msgs.msg import Location
 import rclpy
 from rclpy.node import Node
 
+from random import uniform
 
 class MinimalClientAsync(Node):
 
     def __init__(self):
         super().__init__('minimal_client_async')
-        self.cli = self.create_client(RequestData, '/location_register')
+        self.cli = self.create_client(RequestLocation, '/location_register')
         while not self.cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
-        self.req = RequestData.Request()
-        self.location = Location()
+        self.req = RequestLocation.Request()
 
     def send_request(self):
         self.req.command = sys.argv[1]
         self.req.file = "carry_my_luggage"
-        self.location.name = "sample"
-        self.req.locations.append(self.location)
+
+        location = Location()
+        location.name = "sample"
+        location.position.x = uniform(-10, 10)
+        location.position.y = uniform(-10, 10)
+        location.position.z = uniform(-10, 10)
+        location.contents.append("hello:world")
+        location.contents.append("pub/sub")
+        self.req.locations.append(location)
+        #location = Location()
+        #location.name = "test"
+        #self.req.locations.append(location)
+
         self.future = self.cli.call_async(self.req)
 
 
