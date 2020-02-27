@@ -1,7 +1,7 @@
 #include <iostream>
 #include <rclcpp/rclcpp.hpp>
 
-#include "location_register.hpp"
+#include "location_register/location_register.hpp"
 
 using namespace std;
 
