@@ -33,23 +33,23 @@ void LocationRegister::handleService_(
                 const shared_ptr<rione_msgs::srv::RequestLocation::Request> request,
                 const shared_ptr<rione_msgs::srv::RequestLocation::Response> response)
 {
-    short command_number = check_command(request->command);
+    short command_number = check_command(request->command.data);
 
     RCLCPP_DEBUG(this->get_logger(), "COMMAND NUMBER IS %d", command_number);
 
     switch(command_number) {
         case 0:
-            regist_location(request->locations, request->file);
+            regist_location(request->locations, request->file.data);
             break;
         case 1:
-            response->locations = get_location(request->locations, request->file);
+            response->locations = get_location(request->locations, request->file.data);
             break;
         case 2:
             if(1==(int)request->locations.size())
             {
                 vector<rione_msgs::msg::Location> locations;
-                locations = get_location(request->locations, request->file);
-                response->flag = send_goal_location(locations[0]);
+                locations = get_location(request->locations, request->file.data);
+                response->flag.data = send_goal_location(locations[0]);
             }
             else if((int)request->locations.size()<=0)
             {
@@ -197,7 +197,7 @@ string LocationRegister::location2json(rione_msgs::msg::Location location, strin
     int count;
     for(count=0; count<location.contents.size(); count++)
     {
-        contents.push_back(picojson::value(location.contents[count]));
+        contents.push_back(picojson::value(location.contents[count].data));
     }
 
     if(0<count)
@@ -206,7 +206,7 @@ string LocationRegister::location2json(rione_msgs::msg::Location location, strin
         datalist.push_back(picojson::value(data));
     }
  
-    root.insert(make_pair(location.name, picojson::value(datalist)));
+    root.insert(make_pair(location.name.data, picojson::value(datalist)));
  
     return picojson::value(root).serialize();
 }
@@ -240,7 +240,7 @@ vector<rione_msgs::msg::Location> LocationRegister::get_all_location(string file
     int pos;
     for(pos=0; pos<(int)locations.size(); pos++)
     {
-        log = locations[pos].name + ":" +
+        log = locations[pos].name.data + ":" +
                 to_string(locations[pos].position.x) + "," +
                 to_string(locations[pos].position.y) + "," +
                 to_string(locations[pos].position.z);
@@ -267,7 +267,7 @@ rione_msgs::msg::Location LocationRegister::analyze_content(string content)
     }
 
     map<string, picojson::value> location_object = v.get<picojson::object>();
-    location.name = location_object.begin()->first;
+    location.name.data = location_object.begin()->first;
 
     picojson::array datas = location_object.begin()->second.get<picojson::array>();
     int count;
@@ -285,7 +285,9 @@ rione_msgs::msg::Location LocationRegister::analyze_content(string content)
             int i;
             for(i=0; i<contents.size(); i++)
             {
-                location.contents.push_back(contents[i].serialize());
+                std_msgs::msg::String tmp = std_msgs::msg::String();
+                tmp.data = contents[i].serialize();
+                location.contents.push_back(tmp);
             }
         }
     }
@@ -322,10 +324,10 @@ vector<rione_msgs::msg::Location> LocationRegister::search_position(
     {
         for(count=0; count<(int)search.size(); count++)
         {
-            if(locations[pos].name == search[count].name)
+            if(locations[pos].name.data == search[count].name.data)
             {
                 RCLCPP_DEBUG(this->get_logger(), "GET SPECIFICAL POSITION");
-                log = locations[pos].name + ":" +
+                log = locations[pos].name.data + ":" +
                     to_string(locations[pos].position.x) + "," +
                     to_string(locations[pos].position.y) + "," +
                     to_string(locations[pos].position.z);
@@ -342,7 +344,7 @@ vector<rione_msgs::msg::Location> LocationRegister::search_position(
 //
 //
 bool LocationRegister::send_goal_location(rione_msgs::msg::Location location){
-    string name = location.name;
+    string name = location.name.data;
 
     
     goal_position.pose.position = location.position;
